@@ -3,6 +3,9 @@ import time
 
 import numpy as np
 np.random.seed(1234)
+
+import math as m
+
 import scipy.io
 import theano
 import theano.tensor as T
@@ -10,7 +13,7 @@ import theano.tensor as T
 from scipy.interpolate import griddata
 from scipy.misc import bytescale
 from sklearn.preprocessing import scale
-from utils import augment_EEG
+from utils import augment_EEG, cart2sph, pol2cart
 
 import lasagne
 # from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
@@ -20,10 +23,25 @@ from lasagne.layers import ConcatLayer, ReshapeLayer, get_output_shape
 from lasagne.layers import Conv1DLayer, DimshuffleLayer, LSTMLayer, SliceLayer
 
 
+def azim_proj(pos):
+    """
+    Computes the Azimuthal Equidistant Projection of input point in 3D Cartesian Coordinates.
+    :param pos: position in 3D Cartesian coordinates
+    :return: projected coordinates using Azimuthal Equidistant Projection
+    """
+    [r, elev, az] = cart2sph(pos[0], pos[1], pos[2])
+    return pol2cart(az, m.pi / 2 - elev)
+
+
+# Imagine a plane being placed against (tangent to) a globe. If
+# a light source inside the globe projects the graticule onto
+# the plane the result would be a planar, or azimuthal, map
+# projection.
+
 def gen_images(loc_filename, features_filename, nGridPoints,
                augment=False, pca=False, stdMult=0.1, n_components=2):
     """
-
+    Generates EEG images given electrode locations in 2D space and
     :param loc_filename: Address of the MAT file containing electrode coordinates.
                         An array with shape [n_electrodes, 2] containing X, Y
                         coordinates for each electrode.
