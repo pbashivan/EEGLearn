@@ -26,6 +26,10 @@ from lasagne.layers import Conv1DLayer, DimshuffleLayer, LSTMLayer, SliceLayer
 def azim_proj(pos):
     """
     Computes the Azimuthal Equidistant Projection of input point in 3D Cartesian Coordinates.
+    Imagine a plane being placed against (tangent to) a globe. If
+    a light source inside the globe projects the graticule onto
+    the plane the result would be a planar, or azimuthal, map
+    projection.
     :param pos: position in 3D Cartesian coordinates
     :return: projected coordinates using Azimuthal Equidistant Projection
     """
@@ -33,10 +37,7 @@ def azim_proj(pos):
     return pol2cart(az, m.pi / 2 - elev)
 
 
-# Imagine a plane being placed against (tangent to) a globe. If
-# a light source inside the globe projects the graticule onto
-# the plane the result would be a planar, or azimuthal, map
-# projection.
+
 
 def gen_images(loc_filename, features_filename, nGridPoints,
                augment=False, pca=False, stdMult=0.1, n_components=2):
@@ -46,7 +47,8 @@ def gen_images(loc_filename, features_filename, nGridPoints,
                         An array with shape [n_electrodes, 2] containing X, Y
                         coordinates for each electrode.
     :param features_filename: Address of the MAT file containing features as columns and
-                                last column as labels.
+                                last column as labels. Features corresponding to each
+                                frequency band are concatenated. (alpha1, alpha2, ..., beta1, beta2,...)
     :param nGridPoints: Number of pixels in the output images
     :param augment:     Flag for generating augmented images
     :param pca:         Flag for PCA based data augmentation
@@ -105,12 +107,18 @@ def gen_images(loc_filename, features_filename, nGridPoints,
     return np.swapaxes(np.asarray(temp_interp), 0, 1)     # swap axes to have [samples, colors, W, H]
 
 
-def build_cnn(input_var=None, W_init=None, imSize=32):
+def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=32, imSize=32):
     """
     Builds a VGG style CNN network followed by a fully-connected layer and a softmax layer.
+    Stacks are separated by a maxpool layer. Number of kernels in each layer is twice
+    the number in previous stack.
     input_var: Theano variable for input to the network
     outputs: pointer to the output of the last layer of network (softmax)
     :param input_var: theano variable as input to the network
+    :param n_layers: number of layers in each stack. An array of integers with each
+                    value corresponding to the number of layers in each stack.
+                    (e.g. [4, 2, 1] == 3 stacks with 4, 2, and 1 layers in each.
+    :param n_filters_first: number of filters in the first layer
     :param W_init: Initial weight values
     :param imSize: Size of the image
     :return: a pointer to the output of last layer
@@ -120,48 +128,20 @@ def build_cnn(input_var=None, W_init=None, imSize=32):
     count = 0
     # If no initial weight is given, initialize with GlorotUniform
     if W_init is None:
-        W_init = [lasagne.init.GlorotUniform()] * 7
+        W_init = [lasagne.init.GlorotUniform()] * sum(n_layers)
 
     # Input layer
     network = InputLayer(shape=(None, 3, imSize, imSize),
                                         input_var=input_var)
 
-    # CNN Stack 1
-    network = Conv2DLayer(network, num_filters=32, filter_size=(3, 3),
+    for i, s in enumerate(n_layers):
+        for l in range(s):
+            network = Conv2DLayer(network, num_filters=n_filters_first * (2 ** i), filter_size=(3, 3),
                           W=W_init[count], pad='same')
-    count += 1
-    weights.append(network.W)
-    network = Conv2DLayer(network, num_filters=32, filter_size=(3, 3),
-                          W=W_init[count], pad='same')
-    count += 1
-    weights.append(network.W)
-    network = Conv2DLayer(network, num_filters=32, filter_size=(3, 3),
-                          W=W_init[count], pad='same')
-    count += 1
-    weights.append(network.W)
-    network = Conv2DLayer(network, num_filters=32, filter_size=(3, 3),
-                          W=W_init[count], pad='same')
-    count += 1
-    weights.append(network.W)
-    network = MaxPool2DLayer(network, pool_size=(2, 2))
+            count += 1
+            weights.append(network.W)
+        network = MaxPool2DLayer(network, pool_size=(2, 2))
 
-    # CNN Stack 2
-    network = Conv2DLayer(network, num_filters=64, filter_size=(3, 3),
-                          W=W_init[count], pad='same')
-    count += 1
-    weights.append(network.W)
-    network = Conv2DLayer(network, num_filters=64, filter_size=(3, 3),
-                          W=W_init[count], pad='same')
-    count += 1
-    weights.append(network.W)
-    network = MaxPool2DLayer(network, pool_size=(2, 2))
-
-    # CNN Stack 3
-    network = Conv2DLayer(network, num_filters=128, filter_size=(3, 3),
-                          W=W_init[count], pad='same')
-    count += 1
-    weights.append(network.W)
-    network = MaxPool2DLayer(network, pool_size=(2, 2))
 
     return network, weights
 
@@ -338,8 +318,9 @@ if __name__ == '__main__':
     images = gen_images('Neuroscan_sample_locs.mat',
                         'WM_features_MSP_sample.mat',
                         16, augment=True, pca=True, n_components=3)
+    network = build_cnn(input_var[0])
     network = build_convpool_max(input_var, 5, 3)
     network = build_convpool_conv1d(input_var, 5, 3)
     network = build_convpool_lstm(input_var, 5, 3, 90)
     network = build_convpool_mix(input_var, 5, 3, 90)
-
+    print 'Done!'
