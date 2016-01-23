@@ -30,6 +30,7 @@ def azim_proj(pos):
     a light source inside the globe projects the graticule onto
     the plane the result would be a planar, or azimuthal, map
     projection.
+
     :param pos: position in 3D Cartesian coordinates
     :return: projected coordinates using Azimuthal Equidistant Projection
     """
@@ -37,18 +38,17 @@ def azim_proj(pos):
     return pol2cart(az, m.pi / 2 - elev)
 
 
-
-
-def gen_images(loc_filename, features_filename, nGridPoints,
+def gen_images(locs, features, nGridPoints,
                augment=False, pca=False, stdMult=0.1, n_components=2):
     """
-    Generates EEG images given electrode locations in 2D space and
-    :param loc_filename: Address of the MAT file containing electrode coordinates.
-                        An array with shape [n_electrodes, 2] containing X, Y
+    Generates EEG images given electrode locations in 2D space and multiple feature values for each electrode
+
+    :param loc_filename: An array with shape [n_electrodes, 2] containing X, Y
                         coordinates for each electrode.
-    :param features_filename: Address of the MAT file containing features as columns and
-                                last column as labels. Features corresponding to each
-                                frequency band are concatenated. (alpha1, alpha2, ..., beta1, beta2,...)
+    :param features_filename: Feature matrix as [n_samples, n_features+1]
+                                Features are as columns and last column are labels.
+                                Features corresponding to each frequency band are concatenated.
+                                (alpha1, alpha2, ..., beta1, beta2,...)
     :param nGridPoints: Number of pixels in the output images
     :param augment:     Flag for generating augmented images
     :param pca:         Flag for PCA based data augmentation
@@ -57,21 +57,15 @@ def gen_images(loc_filename, features_filename, nGridPoints,
     :return:            Tensor of size [samples, colors, W, H] containing generated
                         images.
     """
-    # Load electrode locations projected on a 2D surface
-    mat = scipy.io.loadmat(loc_filename)
-    locs = mat['proj'] * [1, -1]    # reverse the Y axis to have the front on the top
+
+    feat_array_temp = []
     nElectrodes = locs.shape[0]     # Number of electrodes
 
-    # Load feature values
-    mat = scipy.io.loadmat(features_filename)
-    data = mat['features']
-    feat_array_temp = []
-
     # Test whether the feature vector length is divisible by number of electrodes (last column is the labels)
-    assert data.shape[1] % nElectrodes == 1
-    n_colors = data.shape[1] / nElectrodes
+    assert features.shape[1] % nElectrodes == 1
+    n_colors = features.shape[1] / nElectrodes
     for c in range(n_colors):
-        feat_array_temp.append(data[:, c * nElectrodes : nElectrodes * (c+1)])
+        feat_array_temp.append(features[:, c * nElectrodes : nElectrodes * (c+1)])
 
 
     if augment:
@@ -82,8 +76,8 @@ def gen_images(loc_filename, features_filename, nGridPoints,
             for c in range(n_colors):
                 feat_array_temp[c] = augment_EEG(feat_array_temp[c], stdMult, pca=False, n_components=n_components)
 
-    labels = data[:, -1]
-    nSamples = data.shape[0]
+    labels = features[:, -1]
+    nSamples = features.shape[0]
     # Interpolate the values
     grid_x, grid_y = np.mgrid[
                      min(locs[:, 0]):max(locs[:, 0]):nGridPoints*1j,
@@ -114,6 +108,7 @@ def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=3
     the number in previous stack.
     input_var: Theano variable for input to the network
     outputs: pointer to the output of the last layer of network (softmax)
+
     :param input_var: theano variable as input to the network
     :param n_layers: number of layers in each stack. An array of integers with each
                     value corresponding to the number of layers in each stack.
@@ -149,6 +144,7 @@ def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=3
 def build_convpool_max(input_vars, numTimeWin, nb_classes):
     """
     Builds the complete network with maxpooling layer in time.
+
     :param input_vars: list of EEG images (one image per time window)
     :param numTimeWin: number of time windows
     :param nb_classes: number of classes
@@ -178,6 +174,7 @@ def build_convpool_max(input_vars, numTimeWin, nb_classes):
 def build_convpool_conv1d(input_vars, numTimeWin, nb_classes):
     """
     Builds the complete network with 1D-conv layer to integrate time from sequences of EEG images.
+
     :param input_vars: list of EEG images (one image per time window)
     :param numTimeWin: number of time windows
     :param nb_classes: number of classes
@@ -216,6 +213,7 @@ def build_convpool_conv1d(input_vars, numTimeWin, nb_classes):
 def build_convpool_lstm(input_vars, numTimeWin, nb_classes, GRAD_CLIP=100):
     """
     Builds the complete network with LSTM layer to integrate time from sequences of EEG images.
+
     :param input_vars: list of EEG images (one image per time window)
     :param numTimeWin: number of time windows
     :param nb_classes: number of classes
@@ -260,7 +258,7 @@ def build_convpool_lstm(input_vars, numTimeWin, nb_classes, GRAD_CLIP=100):
 def build_convpool_mix(input_vars, numTimeWin, nb_classes, GRAD_CLIP=100):
     """
     Builds the complete network with LSTM and 1D-conv layers combined
-    to integrate time from sequences of EEG images.
+
     :param input_vars: list of EEG images (one image per time window)
     :param numTimeWin: number of time windows
     :param nb_classes: number of classes
@@ -315,9 +313,9 @@ def build_convpool_mix(input_vars, numTimeWin, nb_classes, GRAD_CLIP=100):
 if __name__ == '__main__':
     input_var = T.TensorType('floatX', ((False,) * 5))()        # Notice the () at the end
     target_var = T.ivector('targets')
-    images = gen_images('Neuroscan_sample_locs.mat',
-                        'WM_features_MSP_sample.mat',
-                        16, augment=True, pca=True, n_components=3)
+    images = gen_images(np.random.rand(10, 2),
+                        np.random.rand(100, 31),
+                        16, augment=True, pca=True, n_components=2)
     network = build_cnn(input_var[0])
     network = build_convpool_max(input_var, 5, 3)
     network = build_convpool_conv1d(input_var, 5, 3)
