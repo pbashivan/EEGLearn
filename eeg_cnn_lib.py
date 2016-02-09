@@ -43,9 +43,9 @@ def gen_images(locs, features, nGridPoints,
     """
     Generates EEG images given electrode locations in 2D space and multiple feature values for each electrode
 
-    :param loc_filename: An array with shape [n_electrodes, 2] containing X, Y
+    :param loc: An array with shape [n_electrodes, 2] containing X, Y
                         coordinates for each electrode.
-    :param features_filename: Feature matrix as [n_samples, n_features+1]
+    :param features: Feature matrix as [n_samples, n_features+1]
                                 Features are as columns and last column are labels.
                                 Features corresponding to each frequency band are concatenated.
                                 (alpha1, alpha2, ..., beta1, beta2,...)
