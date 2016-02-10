@@ -39,7 +39,7 @@ def azim_proj(pos):
 
 
 def gen_images(locs, features, nGridPoints,
-               augment=False, pca=False, stdMult=0.1, n_components=2):
+               augment=False, pca=False, stdMult=0.1, n_components=2, edgeless=False):
     """
     Generates EEG images given electrode locations in 2D space and multiple feature values for each electrode
 
@@ -54,6 +54,8 @@ def gen_images(locs, features, nGridPoints,
     :param pca:         Flag for PCA based data augmentation
     :param stdMult:     Standard deviation of noise for augmentation
     :param n_components:Number of components in PCA to retain for augmentation
+    :param edgeless:    If True generates edgeless images by adding artificial channels
+                        at four corners of the image with value = 0 (default=False).
     :return:            Tensor of size [samples, colors, W, H] containing generated
                         images.
     """
@@ -86,6 +88,14 @@ def gen_images(locs, features, nGridPoints,
     temp_interp = []
     for c in range(n_colors):
         temp_interp.append(np.zeros([nSamples, nGridPoints, nGridPoints]))
+
+    # Generate edgeless images
+    if edgeless:
+        min_x, min_y = np.min(locs, axis=0)
+        max_x, max_y = np.max(locs, axis=0)
+        locs = np.append(locs, np.array([[min_x, min_y], [min_x, max_y],[max_x, min_y],[max_x, max_y]]),axis=0)
+        for c in range(n_colors):
+            feat_array_temp[c] = np.append(feat_array_temp[c], np.zeros((nSamples, 4)), axis=1)
 
     for i in xrange(nSamples):
         for c in range(n_colors):
@@ -141,16 +151,16 @@ def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=3
     return network, weights
 
 
-def build_convpool_max(input_vars, numTimeWin, nb_classes):
+def build_convpool_max(input_vars, nb_classes):
     """
     Builds the complete network with maxpooling layer in time.
 
     :param input_vars: list of EEG images (one image per time window)
-    :param numTimeWin: number of time windows
     :param nb_classes: number of classes
     :return: a pointer to the output of last layer
     """
     convnets = []
+    numTimeWin = input_vars.ndim
     W_init = None
 
     # Build 7 parallel CNNs with shared weights
@@ -171,15 +181,15 @@ def build_convpool_max(input_vars, numTimeWin, nb_classes):
             num_units=nb_classes, nonlinearity=lasagne.nonlinearities.softmax)
     return convpool
 
-def build_convpool_conv1d(input_vars, numTimeWin, nb_classes):
+def build_convpool_conv1d(input_vars, nb_classes):
     """
     Builds the complete network with 1D-conv layer to integrate time from sequences of EEG images.
 
     :param input_vars: list of EEG images (one image per time window)
-    :param numTimeWin: number of time windows
     :param nb_classes: number of classes
     :return: a pointer to the output of last layer
     """
+    numTimeWin = input_vars.ndim
     convnets = []
     W_init = None
     # Build 7 parallel CNNs with shared weights
@@ -210,18 +220,18 @@ def build_convpool_conv1d(input_vars, numTimeWin, nb_classes):
     return convpool
 
 
-def build_convpool_lstm(input_vars, numTimeWin, nb_classes, GRAD_CLIP=100):
+def build_convpool_lstm(input_vars, nb_classes, GRAD_CLIP=100):
     """
     Builds the complete network with LSTM layer to integrate time from sequences of EEG images.
 
     :param input_vars: list of EEG images (one image per time window)
-    :param numTimeWin: number of time windows
     :param nb_classes: number of classes
     :param GRAD_CLIP:  the gradient messages are clipped to the given value during
                         the backward pass.
     :return: a pointer to the output of last layer
     """
     convnets = []
+    numTimeWin = input_vars.ndim
     W_init = None
     # Build 7 parallel CNNs with shared weights
     for i in range(numTimeWin):
@@ -255,18 +265,18 @@ def build_convpool_lstm(input_vars, numTimeWin, nb_classes, GRAD_CLIP=100):
             num_units=nb_classes, nonlinearity=lasagne.nonlinearities.softmax)
     return convpool
 
-def build_convpool_mix(input_vars, numTimeWin, nb_classes, GRAD_CLIP=100):
+def build_convpool_mix(input_vars, nb_classes, GRAD_CLIP=100):
     """
     Builds the complete network with LSTM and 1D-conv layers combined
 
     :param input_vars: list of EEG images (one image per time window)
-    :param numTimeWin: number of time windows
     :param nb_classes: number of classes
     :param GRAD_CLIP:  the gradient messages are clipped to the given value during
                         the backward pass.
     :return: a pointer to the output of last layer
     """
     convnets = []
+    numTimeWin = input_vars.ndim
     W_init = None
     # Build 7 parallel CNNs with shared weights
     for i in range(numTimeWin):
@@ -317,8 +327,8 @@ if __name__ == '__main__':
                         np.random.rand(100, 31),
                         16, augment=True, pca=True, n_components=2)
     network = build_cnn(input_var[0])
-    network = build_convpool_max(input_var, 5, 3)
-    network = build_convpool_conv1d(input_var, 5, 3)
-    network = build_convpool_lstm(input_var, 5, 3, 90)
-    network = build_convpool_mix(input_var, 5, 3, 90)
+    network = build_convpool_max(input_var, 3)
+    network = build_convpool_conv1d(input_var, 3)
+    network = build_convpool_lstm(input_var, 3, 90)
+    network = build_convpool_mix(input_var, 3, 90)
     print 'Done!'
