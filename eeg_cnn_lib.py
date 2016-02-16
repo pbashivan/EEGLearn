@@ -38,7 +38,7 @@ def azim_proj(pos):
     return pol2cart(az, m.pi / 2 - elev)
 
 
-def gen_images(locs, features, nGridPoints,
+def gen_images(locs, features, nGridPoints, normalize=True,
                augment=False, pca=False, stdMult=0.1, n_components=2, edgeless=False):
     """
     Generates EEG images given electrode locations in 2D space and multiple feature values for each electrode
@@ -46,10 +46,11 @@ def gen_images(locs, features, nGridPoints,
     :param loc: An array with shape [n_electrodes, 2] containing X, Y
                         coordinates for each electrode.
     :param features: Feature matrix as [n_samples, n_features+1]
-                                Features are as columns and last column are labels.
+                                Features are as columns.
                                 Features corresponding to each frequency band are concatenated.
                                 (alpha1, alpha2, ..., beta1, beta2,...)
     :param nGridPoints: Number of pixels in the output images
+    :param normalize:   Flag for whether to normalize each feature over all samples
     :param augment:     Flag for generating augmented images
     :param pca:         Flag for PCA based data augmentation
     :param stdMult:     Standard deviation of noise for augmentation
@@ -64,7 +65,7 @@ def gen_images(locs, features, nGridPoints,
     nElectrodes = locs.shape[0]     # Number of electrodes
 
     # Test whether the feature vector length is divisible by number of electrodes (last column is the labels)
-    assert features.shape[1] % nElectrodes == 1
+    assert features.shape[1] % nElectrodes == 0
     n_colors = features.shape[1] / nElectrodes
     for c in range(n_colors):
         feat_array_temp.append(features[:, c * nElectrodes : nElectrodes * (c+1)])
@@ -78,7 +79,6 @@ def gen_images(locs, features, nGridPoints,
             for c in range(n_colors):
                 feat_array_temp[c] = augment_EEG(feat_array_temp[c], stdMult, pca=False, n_components=n_components)
 
-    labels = features[:, -1]
     nSamples = features.shape[0]
     # Interpolate the values
     grid_x, grid_y = np.mgrid[
@@ -104,8 +104,9 @@ def gen_images(locs, features, nGridPoints,
         print 'Interpolating {0}/{1}\r'.format(i+1, nSamples),
 
     for c in range(n_colors):
-        temp_interp[c][~np.isnan(temp_interp[c])] = \
-            scale(temp_interp[c][~np.isnan(temp_interp[c])])
+        if normalize:
+            temp_interp[c][~np.isnan(temp_interp[c])] = \
+                scale(temp_interp[c][~np.isnan(temp_interp[c])])
         temp_interp[c] = np.nan_to_num(temp_interp[c])
 
     return np.swapaxes(np.asarray(temp_interp), 0, 1)     # swap axes to have [samples, colors, W, H]
