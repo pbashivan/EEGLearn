@@ -45,7 +45,7 @@ def gen_images(locs, features, nGridPoints, normalize=True,
 
     :param loc: An array with shape [n_electrodes, 2] containing X, Y
                         coordinates for each electrode.
-    :param features: Feature matrix as [n_samples, n_features+1]
+    :param features: Feature matrix as [n_samples, n_features]
                                 Features are as columns.
                                 Features corresponding to each frequency band are concatenated.
                                 (alpha1, alpha2, ..., beta1, beta2,...)
@@ -64,7 +64,7 @@ def gen_images(locs, features, nGridPoints, normalize=True,
     feat_array_temp = []
     nElectrodes = locs.shape[0]     # Number of electrodes
 
-    # Test whether the feature vector length is divisible by number of electrodes (last column is the labels)
+    # Test whether the feature vector length is divisible by number of electrodes
     assert features.shape[1] % nElectrodes == 0
     n_colors = features.shape[1] / nElectrodes
     for c in range(n_colors):
@@ -325,7 +325,7 @@ if __name__ == '__main__':
     input_var = T.TensorType('floatX', ((False,) * 5))()        # Notice the () at the end
     target_var = T.ivector('targets')
     images = gen_images(np.random.rand(10, 2),
-                        np.random.rand(100, 31),
+                        np.random.rand(100, 30),
                         16, augment=True, pca=True, n_components=2)
     network = build_cnn(input_var[0])
     network = build_convpool_max(input_var, 3)
