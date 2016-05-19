@@ -54,7 +54,7 @@ def gen_images(locs, features, nGridPoints, normalize=True,
     :param augment:     Flag for generating augmented images
     :param pca:         Flag for PCA based data augmentation
     :param stdMult:     Standard deviation of noise for augmentation
-    :param n_components:Number of components in PCA to retain for augmentation
+    :param n_components: Number of components in PCA to retain for augmentation
     :param edgeless:    If True generates edgeless images by adding artificial channels
                         at four corners of the image with value = 0 (default=False).
     :return:            Tensor of size [samples, colors, W, H] containing generated
@@ -112,7 +112,7 @@ def gen_images(locs, features, nGridPoints, normalize=True,
     return np.swapaxes(np.asarray(temp_interp), 0, 1)     # swap axes to have [samples, colors, W, H]
 
 
-def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=32, imSize=32):
+def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=32, imSize=32, n_colors=3):
     """
     Builds a VGG style CNN network followed by a fully-connected layer and a softmax layer.
     Stacks are separated by a maxpool layer. Number of kernels in each layer is twice
@@ -127,6 +127,7 @@ def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=3
     :param n_filters_first: number of filters in the first layer
     :param W_init: Initial weight values
     :param imSize: Size of the image
+    :param n_colors: Number of color channels (depth)
     :return: a pointer to the output of last layer
     """
 
@@ -137,7 +138,7 @@ def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=3
         W_init = [lasagne.init.GlorotUniform()] * sum(n_layers)
 
     # Input layer
-    network = InputLayer(shape=(None, 3, imSize, imSize),
+    network = InputLayer(shape=(None, n_colors, imSize, imSize),
                                         input_var=input_var)
 
     for i, s in enumerate(n_layers):
@@ -152,7 +153,7 @@ def build_cnn(input_var=None, W_init=None, n_layers=(4, 2, 1), n_filters_first=3
     return network, weights
 
 
-def build_convpool_max(input_vars, nb_classes):
+def build_convpool_max(input_vars, nb_classes, imSize=32, n_colors=3, n_timewin=3):
     """
     Builds the complete network with maxpooling layer in time.
 
@@ -161,15 +162,14 @@ def build_convpool_max(input_vars, nb_classes):
     :return: a pointer to the output of last layer
     """
     convnets = []
-    numTimeWin = input_vars.ndim
     W_init = None
 
     # Build 7 parallel CNNs with shared weights
-    for i in range(numTimeWin):
+    for i in range(n_timewin):
         if i == 0:
-            convnet, W_init = build_cnn(input_vars[i])
+            convnet, W_init = build_cnn(input_vars[i], imSize=imSize, n_colors=n_colors)
         else:
-            convnet, _ = build_cnn(input_vars[i], W_init)
+            convnet, _ = build_cnn(input_vars[i], W_init=W_init, imSize=imSize, n_colors=n_colors)
         convnets.append(convnet)
     # convpooling using Max pooling over frames
     convpool = ElemwiseMergeLayer(convnets, theano.tensor.maximum)
@@ -182,7 +182,7 @@ def build_convpool_max(input_vars, nb_classes):
             num_units=nb_classes, nonlinearity=lasagne.nonlinearities.softmax)
     return convpool
 
-def build_convpool_conv1d(input_vars, nb_classes):
+def build_convpool_conv1d(input_vars, nb_classes, imSize=32, n_colors=3, n_timewin=3):
     """
     Builds the complete network with 1D-conv layer to integrate time from sequences of EEG images.
 
@@ -190,21 +190,20 @@ def build_convpool_conv1d(input_vars, nb_classes):
     :param nb_classes: number of classes
     :return: a pointer to the output of last layer
     """
-    numTimeWin = input_vars.ndim
     convnets = []
     W_init = None
     # Build 7 parallel CNNs with shared weights
-    for i in range(numTimeWin):
+    for i in range(n_timewin):
         if i == 0:
-            convnet, W_init = build_cnn(input_vars[i])
+            convnet, W_init = build_cnn(input_vars[i], imSize=imSize, n_colors=n_colors)
         else:
-            convnet, _ = build_cnn(input_vars[i], W_init)
+            convnet, _ = build_cnn(input_vars[i], W_init=W_init, imSize=imSize, n_colors=n_colors)
         convnets.append(FlattenLayer(convnet))
     # at this point convnets shape is [numTimeWin][n_samples, features]
     # we want the shape to be [n_samples, features, numTimeWin]
     convpool = ConcatLayer(convnets)
 
-    convpool = ReshapeLayer(convpool, ([0], numTimeWin, get_output_shape(convnets[0])[1]))
+    convpool = ReshapeLayer(convpool, ([0], n_timewin, get_output_shape(convnets[0])[1]))
     convpool = DimshuffleLayer(convpool, (0, 2, 1))
     # convpool = ReshapeLayer(convpool, (-1, numTimeWin))
 
@@ -221,7 +220,7 @@ def build_convpool_conv1d(input_vars, nb_classes):
     return convpool
 
 
-def build_convpool_lstm(input_vars, nb_classes, GRAD_CLIP=100):
+def build_convpool_lstm(input_vars, nb_classes, GRAD_CLIP=100, imSize=32, n_colors=3, n_timewin=3):
     """
     Builds the complete network with LSTM layer to integrate time from sequences of EEG images.
 
@@ -232,21 +231,20 @@ def build_convpool_lstm(input_vars, nb_classes, GRAD_CLIP=100):
     :return: a pointer to the output of last layer
     """
     convnets = []
-    numTimeWin = input_vars.ndim
     W_init = None
     # Build 7 parallel CNNs with shared weights
-    for i in range(numTimeWin):
+    for i in range(n_timewin):
         if i == 0:
-            convnet, W_init = build_cnn(input_vars[i])
+            convnet, W_init = build_cnn(input_vars[i], imSize=imSize, n_colors=n_colors)
         else:
-            convnet, _ = build_cnn(input_vars[i], W_init)
+            convnet, _ = build_cnn(input_vars[i], W_init=W_init, imSize=imSize, n_colors=n_colors)
         convnets.append(FlattenLayer(convnet))
     # at this point convnets shape is [numTimeWin][n_samples, features]
     # we want the shape to be [n_samples, features, numTimeWin]
     convpool = ConcatLayer(convnets)
     # convpool = ReshapeLayer(convpool, ([0], -1, numTimeWin))
 
-    convpool = ReshapeLayer(convpool, ([0], numTimeWin, get_output_shape(convnets[0])[1]))
+    convpool = ReshapeLayer(convpool, ([0], n_timewin, get_output_shape(convnets[0])[1]))
     # Input to LSTM should have the shape as (batch size, SEQ_LENGTH, num_features)
     convpool = LSTMLayer(convpool, num_units=128, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh)
@@ -266,7 +264,7 @@ def build_convpool_lstm(input_vars, nb_classes, GRAD_CLIP=100):
             num_units=nb_classes, nonlinearity=lasagne.nonlinearities.softmax)
     return convpool
 
-def build_convpool_mix(input_vars, nb_classes, GRAD_CLIP=100):
+def build_convpool_mix(input_vars, nb_classes, GRAD_CLIP=100, imSize=32, n_colors=3, n_timewin=3):
     """
     Builds the complete network with LSTM and 1D-conv layers combined
 
@@ -277,21 +275,20 @@ def build_convpool_mix(input_vars, nb_classes, GRAD_CLIP=100):
     :return: a pointer to the output of last layer
     """
     convnets = []
-    numTimeWin = input_vars.ndim
     W_init = None
     # Build 7 parallel CNNs with shared weights
-    for i in range(numTimeWin):
+    for i in range(n_timewin):
         if i == 0:
-            convnet, W_init = build_cnn(input_vars[i])
+            convnet, W_init = build_cnn(input_vars[i], imSize=imSize, n_colors=n_colors)
         else:
-            convnet, _ = build_cnn(input_vars[i], W_init)
+            convnet, _ = build_cnn(input_vars[i], W_init=W_init, imSize=imSize, n_colors=n_colors)
         convnets.append(FlattenLayer(convnet))
     # at this point convnets shape is [numTimeWin][n_samples, features]
     # we want the shape to be [n_samples, features, numTimeWin]
     convpool = ConcatLayer(convnets)
     # convpool = ReshapeLayer(convpool, ([0], -1, numTimeWin))
 
-    convpool = ReshapeLayer(convpool, ([0], numTimeWin, get_output_shape(convnets[0])[1]))
+    convpool = ReshapeLayer(convpool, ([0], n_timewin, get_output_shape(convnets[0])[1]))
     reformConvpool = DimshuffleLayer(convpool, (0, 2, 1))
 
     # input to 1D convlayer should be in (batch_size, num_input_channels, input_length)
