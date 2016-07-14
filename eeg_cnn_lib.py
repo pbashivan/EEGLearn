@@ -327,13 +327,15 @@ if __name__ == '__main__':
     locs_2d = []
     # Convert to 2D
     for e in locs_3d:
-        locs_2d.append(azim_proj(locs_3d))
+        locs_2d.append(azim_proj(e))
 
     feats = scipy.io.loadmat('./Sample data/FeatureMat_timeWin.mat')
 
-    images = gen_images(locs_2d,
-                        feats[:192, :-1],
+    images = gen_images(np.array(locs_2d),
+                        feats['features'][:, :192],
                         32, augment=True, pca=True, n_components=2)
+    import matplotlib.pyplot as plt
+    plt.imshow(images[0].transpose(1,2,0))
     network = build_cnn(input_var[0])
     network = build_convpool_max(input_var, 3)
     network = build_convpool_conv1d(input_var, 3)
