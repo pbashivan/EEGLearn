@@ -20,6 +20,6 @@ Lasagne (http://lasagne.readthedocs.org/en/latest/user/installation.html)
 
 If you are using this code please cite our paper.
 
-Bashivan, Pouya, et al. "Learning Representations from EEG with Deep Recurrent-Convolutional Neural Networks." arXiv preprint arXiv:1511.06448 (2015).
+Bashivan, Pouya, et al. "Learning Representations from EEG with Deep Recurrent-Convolutional Neural Networks." International conference on learning representations (2016).
 
 http://arxiv.org/abs/1511.06448

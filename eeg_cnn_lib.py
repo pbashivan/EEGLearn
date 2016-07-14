@@ -38,7 +38,7 @@ def azim_proj(pos):
     return pol2cart(az, m.pi / 2 - elev)
 
 
-def gen_images(locs, features, nGridPoints, normalize=True,
+def gen_images(locs, features, nGridPoints, normalize=True, n_bands=3,
                augment=False, pca=False, stdMult=0.1, n_components=2, edgeless=False):
     """
     Generates EEG images given electrode locations in 2D space and multiple feature values for each electrode
@@ -321,9 +321,19 @@ def build_convpool_mix(input_vars, nb_classes, GRAD_CLIP=100, imSize=32, n_color
 if __name__ == '__main__':
     input_var = T.TensorType('floatX', ((False,) * 5))()        # Notice the () at the end
     target_var = T.ivector('targets')
-    images = gen_images(np.random.rand(10, 2),
-                        np.random.rand(100, 30),
-                        16, augment=True, pca=True, n_components=2)
+    # Load electrode locations
+    locs = scipy.io.loadmat('./Sample data/Neuroscan_locs_orig.mat')
+    locs_3d = locs['A']
+    locs_2d = []
+    # Convert to 2D
+    for e in locs_3d:
+        locs_2d.append(azim_proj(locs_3d))
+
+    feats = scipy.io.loadmat('./Sample data/FeatureMat_timeWin.mat')
+
+    images = gen_images(locs_2d,
+                        feats[:192, :-1],
+                        32, augment=True, pca=True, n_components=2)
     network = build_cnn(input_var[0])
     network = build_convpool_max(input_var, 3)
     network = build_convpool_conv1d(input_var, 3)
