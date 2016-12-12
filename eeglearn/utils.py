@@ -57,12 +57,12 @@ def augment_EEG(data, stdMult, pca=False, n_components=2):
     return augData
 
 
-def augment_EEG_image(image, stdMult, pca=False, n_components=2):
+def augment_EEG_image(image, std_mult, pca=False, n_components=2):
     """
     Augment data by adding normal noise to each feature.
 
     :param image: EEG feature data as a a colored image [n_samples, n_colors, W, H]
-    :param stdMult: Multiplier for std of added noise
+    :param std_mult: Multiplier for std of added noise
     :param pca: if True will perform PCA on data and add noise proportional to PCA components.
     :param n_components: Number of components to consider when using PCA.
     :return: Augmented data as a matrix (n_samples x n_features)
@@ -71,9 +71,9 @@ def augment_EEG_image(image, stdMult, pca=False, n_components=2):
     for c in xrange(image.shape[1]):
         reshData = np.reshape(data['featMat'][:, c, :, :], (data['featMat'].shape[0], -1))
         if pca:
-            augData[:, c, :] = augment_EEG(reshData, stdMult, pca=True, n_components=n_components)
+            augData[:, c, :] = augment_EEG(reshData, std_mult, pca=True, n_components=n_components)
         else:
-            augData[:, c, :] = augment_EEG(reshData, stdMult, pca=False)
+            augData[:, c, :] = augment_EEG(reshData, std_mult, pca=False)
     return np.reshape(augData, data['featMat'].shape)
 
 
@@ -95,13 +95,9 @@ def load_data(data_file):
     print("Loading data from %s" % (data_file))
 
     dataMat = scipy.io.loadmat(data_file, mat_dtype=True)
-    data = dataMat['featMat']
-    labels = dataMat['labels']
-    # indices = np.random.permutation(labels.shape[1])      # shuffling indices
 
     print("Data loading complete. Shape is %r" % (dataMat['featMat'].shape,))
-    # return data[indices, :, :, :].astype(np.uint8), labels[:, indices].T - 1        # Shuffled indices
-    return dataMat['featMat'], dataMat['labels'].T - 1   # Sequential indices
+    return dataMat['features'][:, :-1], dataMat['features'][:, -1] - 1   # Sequential indices
 
 
 def reformatInput(data, labels, indices):

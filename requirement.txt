@@ -1,6 +1,5 @@
-EEGLearn
 numpy>=1.9
 scipy>=0.16
-sklearn>=0.16
+scikit-learn>=0.16
 theano>=0.7
-lasagne>=0.2
+Lasagne>=0.1
