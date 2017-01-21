@@ -3,7 +3,7 @@ import time
 
 import numpy as np
 np.random.seed(1234)
-
+from functools import reduce
 import math as m
 
 import scipy.io
@@ -311,7 +311,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
     if shuffle:
         indices = np.arange(input_len)
         np.random.shuffle(indices)
-    for start_idx in range(0, input_len - batchsize + 1, batchsize):
+    for start_idx in range(0, input_len, batchsize):
         if shuffle:
             excerpt = indices[start_idx:start_idx + batchsize]
         else:
