@@ -15,7 +15,7 @@ from sklearn.preprocessing import scale
 from utils import augment_EEG, cart2sph, pol2cart
 
 import lasagne
-# from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
+from lasagne.regularization import regularize_layer_params, regularize_network_params, l1, l2
 from lasagne.layers import Conv2DLayer, MaxPool2DLayer, InputLayer
 from lasagne.layers import DenseLayer, ElemwiseMergeLayer, FlattenLayer
 from lasagne.layers import ConcatLayer, ReshapeLayer, get_output_shape
@@ -61,6 +61,7 @@ def gen_images(locs, features, n_gridpoints, normalize=True,
     """
     feat_array_temp = []
     nElectrodes = locs.shape[0]     # Number of electrodes
+
     # Test whether the feature vector length is divisible by number of electrodes
     assert features.shape[1] % nElectrodes == 0
     n_colors = features.shape[1] / nElectrodes
@@ -73,7 +74,8 @@ def gen_images(locs, features, n_gridpoints, normalize=True,
         else:
             for c in range(n_colors):
                 feat_array_temp[c] = augment_EEG(feat_array_temp[c], std_mult, pca=False, n_components=n_components)
-    nSamples = features.shape[0]
+    n_samples = features.shape[0]
+
     # Interpolate the values
     grid_x, grid_y = np.mgrid[
                      min(locs[:, 0]):max(locs[:, 0]):n_gridpoints*1j,
@@ -81,20 +83,23 @@ def gen_images(locs, features, n_gridpoints, normalize=True,
                      ]
     temp_interp = []
     for c in range(n_colors):
-        temp_interp.append(np.zeros([nSamples, n_gridpoints, n_gridpoints]))
+        temp_interp.append(np.zeros([n_samples, n_gridpoints, n_gridpoints]))
+
     # Generate edgeless images
     if edgeless:
         min_x, min_y = np.min(locs, axis=0)
         max_x, max_y = np.max(locs, axis=0)
-        locs = np.append(locs, np.array([[min_x, min_y], [min_x, max_y],[max_x, min_y],[max_x, max_y]]),axis=0)
+        locs = np.append(locs, np.array([[min_x, min_y], [min_x, max_y], [max_x, min_y], [max_x, max_y]]), axis=0)
         for c in range(n_colors):
-            feat_array_temp[c] = np.append(feat_array_temp[c], np.zeros((nSamples, 4)), axis=1)
+            feat_array_temp[c] = np.append(feat_array_temp[c], np.zeros((n_samples, 4)), axis=1)
+
     # Interpolating
-    for i in xrange(nSamples):
+    for i in xrange(n_samples):
         for c in range(n_colors):
             temp_interp[c][i, :, :] = griddata(locs, feat_array_temp[c][i, :], (grid_x, grid_y),
-                                    method='cubic', fill_value=np.nan)
-        print('Interpolating {0}/{1}\r'.format(i+1, nSamples), end='\r')
+                                               method='cubic', fill_value=np.nan)
+        print('Interpolating {0}/{1}\r'.format(i + 1, n_samples), end='\r')
+
     # Normalizing
     for c in range(n_colors):
         if normalize:
@@ -118,7 +123,7 @@ def build_cnn(input_var=None, w_init=None, n_layers=(4, 2, 1), n_filters_first=3
                     value corresponding to the number of layers in each stack.
                     (e.g. [4, 2, 1] == 3 stacks with 4, 2, and 1 layers in each.
     :param n_filters_first: number of filters in the first layer
-    :param imSize: Size of the image
+    :param imsize: Size of the image
     :param n_colors: Number of color channels (depth)
     :return: a pointer to the output of last layer
     """
@@ -140,7 +145,7 @@ def build_cnn(input_var=None, w_init=None, n_layers=(4, 2, 1), n_filters_first=3
     return network, weights
 
 
-def build_convpool_max(input_vars, nb_classes, imsize=32, n_colors=3, n_timewin=3):
+def build_convpool_max(input_vars, nb_classes, imsize=32, n_colors=3, n_timewin=7):
     """
     Builds the complete network with maxpooling layer in time.
 
@@ -171,7 +176,7 @@ def build_convpool_max(input_vars, nb_classes, imsize=32, n_colors=3, n_timewin=
     return convpool
 
 
-def build_convpool_conv1d(input_vars, nb_classes, imsize=32, n_colors=3, n_timewin=3):
+def build_convpool_conv1d(input_vars, nb_classes, imsize=32, n_colors=3, n_timewin=7):
     """
     Builds the complete network with 1D-conv layer to integrate time from sequences of EEG images.
 
@@ -207,7 +212,7 @@ def build_convpool_conv1d(input_vars, nb_classes, imsize=32, n_colors=3, n_timew
     return convpool
 
 
-def build_convpool_lstm(input_vars, nb_classes, grad_clip=110, imsize=32, n_colors=3, n_timewin=3):
+def build_convpool_lstm(input_vars, nb_classes, grad_clip=110, imsize=32, n_colors=3, n_timewin=7):
     """
     Builds the complete network with LSTM layer to integrate time from sequences of EEG images.
 
@@ -248,7 +253,7 @@ def build_convpool_lstm(input_vars, nb_classes, grad_clip=110, imsize=32, n_colo
     return convpool
 
 
-def build_convpool_mix(input_vars, nb_classes, grad_clip=110, imsize=32, n_colors=3, n_timewin=3):
+def build_convpool_mix(input_vars, nb_classes, grad_clip=110, imsize=32, n_colors=3, n_timewin=7):
     """
     Builds the complete network with LSTM and 1D-conv layers combined
 
@@ -370,6 +375,10 @@ def train(images, labels, fold, model_type, batch_size=32, num_epochs=5):
     prediction = lasagne.layers.get_output(network)
     loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
     loss = loss.mean()
+    reg_factor = 1e-4
+    l2_penalty = regularize_network_params(network, l2) * reg_factor
+    loss += l2_penalty
+
     params = lasagne.layers.get_all_params(network, trainable=True)
     updates = lasagne.updates.adam(loss, params, learning_rate=0.001)
     # Create a loss expression for validation/testing. The crucial difference
@@ -441,6 +450,7 @@ def train(images, labels, fold, model_type, batch_size=32, num_epochs=5):
     print('-'*50)
     print("Best validation accuracy:\t\t{:.2f} %".format(best_validation_accu * 100))
     print("Best test accuracy:\t\t{:.2f} %".format(av_test_acc * 100))
+    return av_test_acc
 
 
 if __name__ == '__main__':
@@ -473,22 +483,32 @@ if __name__ == '__main__':
     av_feats = reduce(lambda x, y: x+y, [feats[:, i*192:(i+1)*192] for i in range(feats.shape[1] / 192)])
     av_feats = av_feats / (feats.shape[1] / 192)
     images = gen_images(np.array(locs_2d),
-                                  av_feats,
-                                  32, normalize=False)
+                        av_feats,
+                        32, normalize=True)
     print('\n')
 
     # Class labels should start from 0
     print('Training the CNN Model...')
-    train(images, np.squeeze(feats[:, -1]) - 1, fold_pairs[2], 'cnn')
+    test_acc_cnn = []
+    for i in range(len(fold_pairs)):
+        print('fold {0}/{1}'.format(i + 1, len(fold_pairs)))
+        test_acc_cnn.append(train(images, np.squeeze(feats[:, -1]) - 1, fold_pairs[i], 'cnn', num_epochs=10))
 
     # Conv-LSTM Mode
     print('Generating images for all time windows...')
     images_timewin = np.array([gen_images(np.array(locs_2d),
-                                                    feats[:, i * 192:(i + 1) * 192], 32, normalize=False) for i in
-                                         range(feats.shape[1] / 192)
-                                         ])
+                                          feats[:, i * 192:(i + 1) * 192], 32, normalize=True) for i in
+                               range(feats.shape[1] / 192)
+                               ])
     print('\n')
     print('Training the LSTM-CONV Model...')
-    train(images_timewin, np.squeeze(feats[:, -1]) - 1, fold_pairs[2], 'mix')
+    test_acc_mix = []
+    for i in range(len(fold_pairs)):
+        print('fold {0}/{1}'.format(i+1, len(fold_pairs)))
+        test_acc_mix.append(train(images_timewin, np.squeeze(feats[:, -1]) - 1, fold_pairs[i], 'mix', num_epochs=10))
+    print('*' * 40)
+    print('Average MIX test accuracy: {0}'.format(np.mean(test_acc_mix)*100))
+    print('Average CNN test accuracy: {0}'.format(np.mean(test_acc_cnn) * 100))
+    print('*' * 40)
 
     print('Done!')
