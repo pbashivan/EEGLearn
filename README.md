@@ -33,9 +33,13 @@ eeglib.train(images, labels, train_test_fold, model_type)
 1. When using the images to train a neural network, in many cases it is helpful to scale the values in the images to a symmetric range like `[-0.5, 0.5]`.
 2. Images generated with `gen_images` function appear in the center of the field with unused space around them. This causes edges to appear around the images. To get around this, an edgeless option was added to gen_images function but I never systematically tried it to evaluate potential gains in performance.
 
-A Tensorflow implementation of the model can be found here (Special thanks to @YangWangsky):
+Tensorflow implementation can be found here (thanks to @YangWangsky):
 
 https://github.com/YangWangsky/tf_EEGLearn
+
+PyTorch implementation (thanks to @VDelv):
+
+https://github.com/VDelv/EEGLearn-Pytorch
 
 # Reference
 If you are using this code please cite our paper.
