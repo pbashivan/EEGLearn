@@ -1,10 +1,12 @@
 __author__ = 'Pouya Bashivan'
+from __future__ import print_function
 
 import math as m
 import numpy as np
 np.random.seed(123)
 import scipy.io
 from sklearn.decomposition import PCA
+
 
 def cart2sph(x, y, z):
     """
@@ -68,7 +70,7 @@ def augment_EEG_image(image, std_mult, pca=False, n_components=2):
     :return: Augmented data as a matrix (n_samples x n_features)
     """
     augData = np.zeros((data.shape[0], data.shape[1], data.shape[2] * data.shape[3]))
-    for c in xrange(image.shape[1]):
+    for c in range(image.shape[1]):
         reshData = np.reshape(data['featMat'][:, c, :, :], (data['featMat'].shape[0], -1))
         if pca:
             augData[:, c, :] = augment_EEG(reshData, std_mult, pca=True, n_components=n_components)
@@ -124,5 +126,5 @@ def reformatInput(data, labels, indices):
 
 if __name__ == '__main__':
     data = np.random.normal(size=(100, 10))
-    print 'Original: {0}'.format(data)
-    print 'Augmented: {0}'.format(augment_EEG(data, 0.1, pca=True))
+    print("Original: {0}".format(data))
+    print("Augmented: {0}".format(augment_EEG(data, 0.1, pca=True)))

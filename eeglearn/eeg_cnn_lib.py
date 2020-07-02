@@ -94,7 +94,7 @@ def gen_images(locs, features, n_gridpoints, normalize=True,
             feat_array_temp[c] = np.append(feat_array_temp[c], np.zeros((n_samples, 4)), axis=1)
 
     # Interpolating
-    for i in xrange(n_samples):
+    for i in range(n_samples):
         for c in range(n_colors):
             temp_interp[c][i, :, :] = griddata(locs, feat_array_temp[c][i, :], (grid_x, grid_y),
                                                method='cubic', fill_value=np.nan)
